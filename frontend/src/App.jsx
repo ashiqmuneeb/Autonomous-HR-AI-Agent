@@ -1,121 +1,239 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { BrainCircuit, Clock, MapPin, AlertTriangle, CheckCircle2, Loader2, Sparkles } from 'lucide-react'
-import './index.css'
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import Sidebar from './components/Navbar';
+import AnomalyFeed from './components/AnomalyFeed';
+import ClockInSimulator from './components/ClockInSimulator';
+import AttendanceLedger from './components/AttendanceLedger';
+import PolicyManager from './components/PolicyManager';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import StreamingThoughtModal from './components/StreamingThoughtModal';
+import AnomalyDetailModal from './components/AnomalyDetailModal';
+import AddEmployeeModal from './components/AddEmployeeModal';
+import LiveCameraFeed from './components/LiveCameraFeed';
+import './index.css';
 
 function App() {
-  const [anomalies, setAnomalies] = useState([])
-  const [loadingMap, setLoadingMap] = useState({})
+  const [activeTab, setActiveTab] = useState('anomalies');
+  const [employees, setEmployees] = useState([]);
+  const [anomalies, setAnomalies] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [policies, setPolicies] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch anomalies from Node.js backend
+  // Streaming modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [streamingAnomaly, setStreamingAnomaly] = useState(null);
+  const [streamEvents, setStreamEvents] = useState([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  // Detail / Explanation modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedAnomalyForDetail, setSelectedAnomalyForDetail] = useState(null);
+
+  // Add Employee modal state
+  const [addEmployeeModalOpen, setAddEmployeeModalOpen] = useState(false);
+
   useEffect(() => {
-    fetchAnomalies()
-  }, [])
+    fetchAllData();
+    // Poll data every 10 seconds for real-time sync
+    const interval = setInterval(fetchAllData, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const fetchAnomalies = async () => {
+  const fetchAllData = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/anomalies')
-      setAnomalies(res.data)
-    } catch (error) {
-      console.error("Failed to fetch anomalies", error)
-    }
-  }
+      const [empRes, anoRes, attRes, polRes, anaRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/employees'),
+        axios.get('http://localhost:5000/api/anomalies'),
+        axios.get('http://localhost:5000/api/attendance'),
+        axios.get('http://localhost:5000/api/policies'),
+        axios.get('http://localhost:5000/api/analytics')
+      ]);
 
-  const resolveWithAI = async (eventId) => {
-    setLoadingMap(prev => ({ ...prev, [eventId]: true }))
-    
-    try {
-      const res = await axios.post('http://localhost:5000/api/resolve-anomaly', {
-        event_id: eventId
-      })
-      
-      // Update local state with the resolved anomaly
-      setAnomalies(prev => prev.map(a => 
-        a.id === eventId ? res.data.anomaly : a
-      ))
+      setEmployees(empRes.data);
+      setAnomalies(anoRes.data);
+      setAttendanceRecords(attRes.data);
+      setPolicies(polRes.data);
+      setAnalytics(anaRes.data);
+      setLoading(false);
     } catch (error) {
-      console.error("Failed to resolve with AI", error)
-      alert("AI Agent failed. Make sure Python FastAPI is running on port 8000 and Node on port 5000.")
-    } finally {
-      setLoadingMap(prev => ({ ...prev, [eventId]: false }))
+      console.error('Error fetching system data:', error);
+      setLoading(false);
     }
-  }
+  };
+
+  // Start Real-Time AI Streaming Resolution
+  const handleResolveStream = async (anomaly) => {
+    setStreamingAnomaly(anomaly);
+    setStreamEvents([]);
+    setModalOpen(true);
+    setIsStreaming(true);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/resolve-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: anomaly.id })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep last incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              setStreamEvents(prev => [...prev, data]);
+            } catch (e) {
+              console.error('Parse error on SSE line:', line);
+            }
+          }
+        }
+      }
+
+      setIsStreaming(false);
+      fetchAllData();
+    } catch (error) {
+      console.error('Streaming error:', error);
+      setStreamEvents(prev => [...prev, { type: 'error', content: error.message }]);
+      setIsStreaming(false);
+    }
+  };
+
+  // Open Detailed Explanation Modal
+  const handleOpenDetailModal = (anomaly) => {
+    setSelectedAnomalyForDetail(anomaly);
+    setDetailModalOpen(true);
+  };
+
+  // Human-in-the-Loop decision handler
+  const handleHitlDecision = async (eventId, action, notes) => {
+    try {
+      await axios.post('http://localhost:5000/api/hitl/decision', {
+        event_id: eventId,
+        action,
+        notes
+      });
+      fetchAllData();
+    } catch (error) {
+      alert('Failed to submit decision: ' + error.message);
+    }
+  };
+
+  const pendingCount = anomalies.filter(a => a.status === 'pending').length;
+  const escalatedCount = anomalies.filter(a => a.status === 'escalated_to_human').length;
 
   return (
-    <div className="app-container">
-      <header className="header">
-        <h1>Autonomous AI Agent</h1>
-        <p>Fully Autonomous HR Administration Dashboard</p>
-      </header>
+    <div className="app-layout">
+      {/* Left Sidebar */}
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab}
+        pendingCount={pendingCount}
+        escalatedCount={escalatedCount}
+        totalEmployees={employees.length}
+      />
 
-      <div className="anomalies-grid">
-        {anomalies.map((anomaly) => (
-          <div key={anomaly.id} className="anomaly-card">
-            
-            {/* Loading State Overlay */}
-            {loadingMap[anomaly.id] && (
-              <div className="loading-overlay">
-                <Loader2 size={40} className="spinner" color="#3b82f6" />
-                <div className="loading-text">AI Agent Investigating...</div>
-              </div>
-            )}
-
-            <div className="card-header">
-              <div className="employee-info">
-                <h2>{anomaly.employee_name}</h2>
-                <p>ID: {anomaly.employee_id}</p>
-              </div>
-              <div className={`badge ${anomaly.status}`}>
-                {anomaly.status}
-              </div>
+      {/* Main Content Area */}
+      <div className="main-wrapper">
+        <main className="main-content">
+          {loading ? (
+            <div className="clean-card" style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+              <h3 style={{ color: 'var(--primary)', fontWeight: 600 }}>Loading dashboard...</h3>
             </div>
+          ) : (
+            <>
+              {activeTab === 'anomalies' && (
+                <AnomalyFeed 
+                  anomalies={anomalies}
+                  onResolveStream={handleResolveStream}
+                  onHitlDecision={handleHitlDecision}
+                  onOpenDetailModal={handleOpenDetailModal}
+                  loadingEventId={isStreaming ? streamingAnomaly?.id : null}
+                />
+              )}
 
-            <div className="anomaly-details">
-              <p>
-                <AlertTriangle size={16} color="#f59e0b" />
-                <span><strong>Type:</strong> {anomaly.anomaly_type.replace('_', ' ').toUpperCase()}</span>
-              </p>
-              <p>
-                <Clock size={16} color="#94a3b8" />
-                <span><strong>Time:</strong> {anomaly.timestamp}</span>
-              </p>
-              <p>
-                <MapPin size={16} color="#94a3b8" />
-                <span><strong>Location:</strong> Main Office</span>
-              </p>
-            </div>
+              {activeTab === 'kiosk' && (
+                <ClockInSimulator 
+                  employees={employees}
+                  onClockInSuccess={fetchAllData}
+                  onNavigateToAnomalies={() => setActiveTab('anomalies')}
+                />
+              )}
 
-            {anomaly.status === 'pending' ? (
-              <button 
-                className="btn-resolve"
-                onClick={() => resolveWithAI(anomaly.id)}
-                disabled={loadingMap[anomaly.id]}
-              >
-                <Sparkles size={18} />
-                Resolve with AI Agent
-              </button>
-            ) : (
-              <div className="resolution-box">
-                <h3>
-                  <CheckCircle2 size={18} />
-                  AI Resolution Complete
-                </h3>
-                {anomaly.agent_resolution && (
-                  <>
-                    <span className="action-taken">⚡ {anomaly.agent_resolution.action_taken}</span>
-                    <p style={{ marginTop: '0.8rem' }}>
-                      <strong>Reasoning:</strong> {anomaly.agent_resolution.reasoning}
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-            
-          </div>
-        ))}
+              {activeTab === 'ledger' && (
+                <AttendanceLedger 
+                  records={attendanceRecords}
+                  employees={employees}
+                  onOpenAddEmployeeModal={() => setAddEmployeeModalOpen(true)}
+                />
+              )}
+
+              {activeTab === 'cameras' && (
+                <LiveCameraFeed 
+                  employees={employees}
+                />
+              )}
+
+              {activeTab === 'policies' && (
+                <PolicyManager 
+                  policies={policies}
+                  onPolicyAdded={fetchAllData}
+                />
+              )}
+
+              {activeTab === 'analytics' && (
+                <AnalyticsDashboard 
+                  analytics={analytics}
+                />
+              )}
+            </>
+          )}
+        </main>
+
+        {/* Global Footer */}
+        <footer className="app-footer">
+          <div>PulseHR • Autonomous Workforce Intelligence</div>
+          <div>SQLite Database Connected • LangGraph Active</div>
+        </footer>
       </div>
+
+      {/* Streaming Thought Modal */}
+      <StreamingThoughtModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        anomaly={streamingAnomaly}
+        streamEvents={streamEvents}
+        isStreaming={isStreaming}
+        onComplete={fetchAllData}
+      />
+
+      {/* Dedicated Anomaly Explanation & Evidence Modal */}
+      <AnomalyDetailModal 
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        anomaly={selectedAnomalyForDetail}
+        onHitlDecision={handleHitlDecision}
+      />
+
+      {/* Add Employee Modal */}
+      <AddEmployeeModal 
+        isOpen={addEmployeeModalOpen}
+        onClose={() => setAddEmployeeModalOpen(false)}
+        onEmployeeAdded={fetchAllData}
+      />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
