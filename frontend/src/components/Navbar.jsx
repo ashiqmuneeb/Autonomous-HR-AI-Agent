@@ -6,7 +6,10 @@ import {
   ShieldAlert, 
   BookOpen, 
   BarChart3, 
-  Camera
+  Camera,
+  Layers,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalatedCount, totalEmployees }) {
@@ -15,17 +18,17 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
       {/* Brand Header */}
       <div className="sidebar-brand">
         <div className="brand-logo-icon">
-          <BrainCircuit size={22} color="#ffffff" />
+          <BrainCircuit size={22} />
         </div>
         <div className="brand-titles">
           <h2>PulseHR</h2>
-          <span className="brand-badge">AI AGENT</span>
+          <span className="brand-badge">AUTONOMOUS AI</span>
         </div>
       </div>
 
       {/* Navigation Sections */}
       <div className="sidebar-section">
-        <div className="sidebar-label">WORKFORCE OPERATIONS</div>
+        <div className="sidebar-label">Workforce Operations</div>
         <nav className="sidebar-nav">
           <button 
             className={`sidebar-nav-item ${activeTab === 'anomalies' ? 'active' : ''}`}
@@ -35,7 +38,11 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
               <ShieldAlert size={18} />
               <span>Attendance Issues</span>
             </div>
-            {pendingCount > 0 && <span className="badge-pill count-alert">{pendingCount}</span>}
+            {pendingCount > 0 ? (
+              <span className="badge-pill count-alert">{pendingCount}</span>
+            ) : (
+              <span className="badge-pill count-neutral">0</span>
+            )}
           </button>
 
           <button 
@@ -44,7 +51,7 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
           >
             <div className="nav-icon-label">
               <Clock size={18} />
-              <span>Clock In Terminal</span>
+              <span>Clock-In Terminal</span>
             </div>
           </button>
 
@@ -56,6 +63,9 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
               <Users size={18} />
               <span>Team & Attendance</span>
             </div>
+            {totalEmployees > 0 && (
+              <span className="badge-pill count-neutral">{totalEmployees}</span>
+            )}
           </button>
 
           <button 
@@ -66,12 +76,13 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
               <Camera size={18} />
               <span>Gate Cameras & Vision</span>
             </div>
+            <span className="badge-pill count-neutral" style={{ color: 'var(--accent-cyan)' }}>3 LIVE</span>
           </button>
         </nav>
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-label">GOVERNANCE & INSIGHTS</div>
+        <div className="sidebar-label">Governance & Insights</div>
         <nav className="sidebar-nav">
           <button 
             className={`sidebar-nav-item ${activeTab === 'policies' ? 'active' : ''}`}
@@ -89,7 +100,7 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
           >
             <div className="nav-icon-label">
               <BarChart3 size={18} />
-              <span>Performance</span>
+              <span>Performance KPIs</span>
             </div>
           </button>
         </nav>
@@ -98,11 +109,16 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
       {/* Sidebar Footer Status */}
       <div className="sidebar-footer">
         <div className="ai-status-card">
-          <div className="ai-status-indicator">
-            <span className="status-dot-pulse"></span>
-            <span className="ai-status-text">AI Agent Active</span>
+          <div className="ai-status-avatar">
+            <Sparkles size={18} />
           </div>
-          <p className="ai-status-sub">Listening for check-in & gate events</p>
+          <div className="ai-status-details">
+            <span className="ai-status-title">LangGraph Brain</span>
+            <span className="ai-status-subtitle">
+              <span className="pulse-indicator"></span>
+              Autonomous Agent Online
+            </span>
+          </div>
         </div>
       </div>
     </aside>

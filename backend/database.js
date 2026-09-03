@@ -109,7 +109,36 @@ CREATE TABLE IF NOT EXISTS employee_messages (
     message TEXT NOT NULL,
     timestamp TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS camera_settings (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    rtsp_url TEXT NOT NULL,
+    camera_model TEXT DEFAULT 'Hikvision DS-2CD2043G2',
+    protocol TEXT DEFAULT 'RTSP_TCP',
+    location TEXT NOT NULL,
+    status TEXT DEFAULT 'ONLINE',
+    ocr_enabled INTEGER DEFAULT 1,
+    fps INTEGER DEFAULT 30,
+    resolution TEXT DEFAULT '1080p',
+    created_at TEXT NOT NULL
+);
 `);
+
+// Pre-seed default RTSP camera endpoints if empty
+const countCameras = db.prepare('SELECT COUNT(*) as count FROM camera_settings').get().count;
+if (countCameras === 0) {
+    const insertCam = db.prepare(`
+        INSERT INTO camera_settings (id, name, rtsp_url, camera_model, protocol, location, status, ocr_enabled, fps, resolution, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const now = new Date().toISOString();
+    insertCam.run('CAM_01_NORTH', 'Main North Gate LPR', 'rtsp://admin:SecurityPass99@192.168.1.101:554/Streaming/Channels/101', 'Hikvision Pro LPR (DS-2CD7A26G0/P-IZS)', 'RTSP_TCP', 'North Campus Entrance', 'ONLINE', 1, 30, '1920x1080', now);
+    insertCam.run('CAM_02_SOUTH', 'South Commercial Gate', 'rtsp://admin:SecurityPass99@192.168.1.102:554/cam/realmonitor?channel=1&subtype=0', 'Dahua ANPR Bullet (ITC237-PW6M-IRLZF1050)', 'RTSP_TCP', 'South Logistics Bay', 'ONLINE', 1, 25, '1920x1080', now);
+    insertCam.run('CAM_03_PARKING', 'Executive Parking West', 'rtsp://admin:SecurityPass99@192.168.1.103:554/live/ch0', 'Axis Q1700-E License Plate Camera', 'RTSP_TCP', 'West Parking Boom Barrier', 'ONLINE', 1, 30, '1920x1080', now);
+    insertCam.run('CAM_04_WEBCAM', 'Local Terminal USB Cam', 'webcam://0', 'Logitech Brio 4K / USB WebCam', 'DIRECT_WEBCAM', 'HR Check-In Kiosk 01', 'ONLINE', 1, 60, '1920x1080', now);
+}
+
 
 // Seed Data Initialization if empty
 const countEmployees = db.prepare('SELECT COUNT(*) as count FROM employees').get().count;

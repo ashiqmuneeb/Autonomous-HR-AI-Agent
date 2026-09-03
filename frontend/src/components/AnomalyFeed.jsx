@@ -7,20 +7,62 @@ import {
   ShieldAlert, 
   UserCheck, 
   XCircle, 
-  Car,
-  FileText,
-  ArrowRight
+  Car, 
+  FileText, 
+  ArrowRight, 
+  MapPin, 
+  Eye, 
+  Search, 
+  Filter, 
+  FileCheck, 
+  RotateCcw, 
+  Download, 
+  Shield, 
+  ShieldCheck,
+  AlertCircle,
+  Lock,
+  LayoutGrid,
+  List,
+  ChevronDown,
+  ChevronUp,
+  Printer
 } from 'lucide-react';
 import { formatLabel } from '../utils';
 
-export default function AnomalyFeed({ anomalies, onResolveStream, onHitlDecision, onOpenDetailModal, loadingEventId }) {
+export default function AnomalyFeed({ 
+  anomalies, 
+  onResolveStream, 
+  onHitlDecision, 
+  onOpenDetailModal, 
+  loadingEventId,
+  searchQuery = '',
+  activeRole = 'HR_ADMIN',
+  maskPII = false,
+  onShowToast
+}) {
   const [filter, setFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'dense'
+  const [expandedReasoning, setExpandedReasoning] = useState({}); // { [anoId]: boolean }
 
-  const filteredAnomalies = anomalies.filter(a => {
-    if (filter === 'all') return true;
-    if (filter === 'pending') return a.status === 'pending';
-    if (filter === 'escalated') return a.status === 'escalated_to_human';
-    if (filter === 'resolved') return a.status === 'resolved';
+  const toggleReasoning = (id) => {
+    setExpandedReasoning(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const filteredAnomalies = (anomalies || []).filter(a => {
+    if (filter === 'pending' && a.status !== 'pending') return false;
+    if (filter === 'escalated' && a.status !== 'escalated_to_human') return false;
+    if (filter === 'resolved' && a.status !== 'resolved' && a.status !== 'rejected') return false;
+    if (filter === 'rejected' && a.status !== 'rejected') return false;
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchName = a.employee_name?.toLowerCase().includes(q);
+      const matchId = a.employee_id?.toLowerCase().includes(q);
+      const matchType = a.anomaly_type?.toLowerCase().includes(q);
+      const matchDept = a.department?.toLowerCase().includes(q);
+      if (!matchName && !matchId && !matchType && !matchDept) return false;
+    }
+
     return true;
   });
 
@@ -29,218 +71,393 @@ export default function AnomalyFeed({ anomalies, onResolveStream, onHitlDecision
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
+  const getSeverityBadge = (type) => {
+    switch (type) {
+      case 'GEOFENCE_MISMATCH':
+        return { label: 'Location Delta', color: 'var(--accent-amber)', ribbon: 'ribbon-amber' };
+      case 'GATE_CAMERA_MISMATCH':
+        return { label: 'Vehicle LPR Discrepancy', color: 'var(--accent-cyan)', ribbon: 'ribbon-cyan' };
+      case 'TIME_DISCREPANCY':
+      case 'POLICY_VIOLATION':
+        return { label: 'Policy Exception', color: 'var(--accent-rose)', ribbon: 'ribbon-rose' };
+      default:
+        return { label: 'Attendance Flag', color: 'var(--primary)', ribbon: 'ribbon-blue' };
+    }
+  };
+
+  const maskText = (text, visibleLen = 3) => {
+    if (!maskPII || !text) return text;
+    if (text.length <= visibleLen) return '***';
+    return text.slice(0, visibleLen) + '•'.repeat(Math.max(3, text.length - visibleLen));
+  };
+
+  const handlePrintDossier = (ano) => {
+    window.print();
+    if (onShowToast) {
+      onShowToast({
+        type: 'info',
+        title: 'Compliance Memorandum Generated',
+        message: `Print dialogue dispatched for incident #${ano.id} (${ano.employee_name}).`
+      });
+    }
+  };
+
+  const handleExportDossier = (ano) => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(ano, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `pulsehr_dossier_${ano.id}_${ano.employee_id}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    if (onShowToast) {
+      onShowToast({
+        type: 'success',
+        title: 'Dossier Exported',
+        message: `Complete immutable audit package downloaded for Case #${ano.id}.`
+      });
+    }
+  };
+
   return (
     <div>
       {/* Page Header */}
       <div className="page-header">
         <div className="page-header-titles">
-          <h1>Attendance Issues</h1>
-          <p>Review check-in discrepancies and let the AI agent investigate and resolve them.</p>
+          <h1>Workforce Attendance Discrepancies</h1>
+          <p>Multi-signal automated triage cross-referencing GPS geofence breaches, optical gate camera OCR, and corporate policies with full auditability.</p>
         </div>
 
-        {/* Filter Pills */}
-        <div className="filter-tabs-row">
-          <button 
-            className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            All ({anomalies.length})
-          </button>
-          <button 
-            className={`filter-btn ${filter === 'pending' ? 'active' : ''}`}
-            onClick={() => setFilter('pending')}
-          >
-            Pending ({anomalies.filter(a => a.status === 'pending').length})
-          </button>
-          <button 
-            className={`filter-btn ${filter === 'escalated' ? 'active' : ''}`}
-            onClick={() => setFilter('escalated')}
-          >
-            Needs Review ({anomalies.filter(a => a.status === 'escalated_to_human').length})
-          </button>
-          <button 
-            className={`filter-btn ${filter === 'resolved' ? 'active' : ''}`}
-            onClick={() => setFilter('resolved')}
-          >
-            Resolved ({anomalies.filter(a => a.status === 'resolved').length})
-          </button>
+        {/* View Mode & Filter Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* Filter Pills */}
+          <div className="filter-tabs-row">
+            <button 
+              className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              All ({anomalies?.length || 0})
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'pending' ? 'active' : ''}`}
+              onClick={() => setFilter('pending')}
+            >
+              Pending ({anomalies?.filter(a => a.status === 'pending').length || 0})
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'escalated' ? 'active' : ''}`}
+              onClick={() => setFilter('escalated')}
+            >
+              Needs Review ({anomalies?.filter(a => a.status === 'escalated_to_human').length || 0})
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'resolved' ? 'active' : ''}`}
+              onClick={() => setFilter('resolved')}
+            >
+              Resolved ({anomalies?.filter(a => a.status === 'resolved' || a.status === 'rejected').length || 0})
+            </button>
+          </div>
+
+          {/* View Mode Switcher (Cards vs Dense Table) */}
+          <div className="view-mode-toggle-group">
+            <button 
+              className={`view-toggle-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
+              title="Card Grid View"
+            >
+              <LayoutGrid size={15} />
+            </button>
+            <button 
+              className={`view-toggle-btn ${viewMode === 'dense' ? 'active' : ''}`}
+              onClick={() => setViewMode('dense')}
+              title="Dense Table View"
+            >
+              <List size={15} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {filteredAnomalies.length === 0 ? (
-        <div className="clean-card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
-          <CheckCircle2 size={40} color="var(--accent-green)" style={{ margin: '0 auto 0.75rem' }} />
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 600 }}>No issues in this queue</h3>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-            All attendance punches are verified and on time.
-          </p>
+      {/* DENSE TABLE VIEW */}
+      {viewMode === 'dense' ? (
+        <div className="clean-card table-wrapper" style={{ padding: 0 }}>
+          <table className="custom-table">
+            <thead>
+              <tr>
+                <th>Incident ID</th>
+                <th>Employee</th>
+                <th>Discrepancy Type</th>
+                <th>Punch Time</th>
+                <th>Sensor Evidence</th>
+                <th>Status</th>
+                <th>AI Verdict / Resolution</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAnomalies.map((ano) => {
+                const severity = getSeverityBadge(ano.anomaly_type);
+                const isPending = ano.status === 'pending';
+                const isEscalated = ano.status === 'escalated_to_human';
+                const isResolved = ano.status === 'resolved';
+
+                return (
+                  <tr key={ano.id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>#{ano.id}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div className="user-avatar" style={{ width: 28, height: 28, fontSize: '0.72rem', background: 'var(--primary)' }}>
+                          {getInitials(ano.employee_name)}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{ano.employee_name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{ano.employee_id} • {ano.department}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="guardrail-chip pass" style={{ fontSize: '0.72rem' }}>
+                        {formatLabel(ano.anomaly_type)}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{ano.timestamp || '08:30 AM'}</td>
+                    <td>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {ano.simulated_distance_m ? `${ano.simulated_distance_m}m GPS drift` : 'Campus Zone'}
+                        {ano.gate_event_simulated ? ' • Plate 99%' : ' • No LPR'}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${ano.status}`}>
+                        {ano.status === 'escalated_to_human' ? 'Needs Review' : formatLabel(ano.status)}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.78rem', color: isResolved ? 'var(--accent-green)' : 'var(--text-tertiary)', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ano.ai_resolution_reason || ano.notes || 'Awaiting automated agent triage...'}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                        {isPending && activeRole !== 'AUDITOR' && (
+                          <button 
+                            className="quick-action-btn primary" 
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                            onClick={() => onResolveStream(ano)}
+                          >
+                            <Sparkles size={12} />
+                            <span>Resolve</span>
+                          </button>
+                        )}
+                        <button 
+                          className="header-icon-btn" 
+                          style={{ width: 28, height: 28 }}
+                          onClick={() => onOpenDetailModal(ano)}
+                          title="View Full Dossier"
+                        >
+                          <Eye size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
+        /* CARDS GRID VIEW */
         <div className="cards-grid">
-          {filteredAnomalies.map((ano) => (
-            <div key={ano.id} className="clean-card">
-              {/* Card Top Row */}
-              <div className="card-top-row">
-                <div className="user-badge-group">
-                  <div 
-                    className="user-avatar" 
-                    style={{ background: ano.avatar_color || '#2563eb' }}
-                  >
-                    {getInitials(ano.employee_name)}
-                  </div>
-                  <div className="user-info">
-                    <h3>{ano.employee_name || ano.employee_id}</h3>
-                    <p>{ano.role || 'Staff'} • {ano.department || 'Operations'}</p>
-                  </div>
-                </div>
+          {filteredAnomalies.map((ano) => {
+            const severity = getSeverityBadge(ano.anomaly_type);
+            const isPending = ano.status === 'pending';
+            const isEscalated = ano.status === 'escalated_to_human';
+            const isResolved = ano.status === 'resolved';
+            const isRejected = ano.status === 'rejected';
+            const occurrenceCount = ano.occurrence_count || (ano.employee_id === 'EMP-102' ? 2 : 1);
+            const isGuardrailTripped = occurrenceCount > 2;
+            const isExpanded = !!expandedReasoning[ano.id];
 
-                <span className={`status-pill ${ano.status}`}>
-                  {formatLabel(ano.status)}
-                </span>
-              </div>
+            return (
+              <div key={ano.id} className="clean-card discrepancy-card">
+                {/* Visual Corner Status Ribbon */}
+                <div className={`card-corner-ribbon ${severity.ribbon}`}></div>
 
-              {/* Clean Data Strip */}
-              <div className="info-strip">
-                <div className="info-item">
-                  <span className="info-label">Issue Type</span>
-                  <span className="info-val" style={{ color: 'var(--accent-amber)', fontWeight: 600 }}>
-                    <AlertTriangle size={14} />
-                    {formatLabel(ano.anomaly_type)}
-                  </span>
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">Punch Time</span>
-                  <span className="info-val">
-                    <Clock size={14} color="var(--text-tertiary)" />
-                    {ano.timestamp}
-                  </span>
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">Vehicle Plate</span>
-                  <span className="info-val">
-                    <Car size={14} color="var(--text-tertiary)" />
-                    {ano.license_plate || 'Not registered'}
-                  </span>
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">Attendance Rate</span>
-                  <span className="info-val" style={{ color: (ano.reliability_score || 95) >= 90 ? 'var(--accent-green)' : 'var(--accent-rose)', fontWeight: 600 }}>
-                    {ano.reliability_score || 95}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Status Action Cards */}
-              {ano.status === 'pending' && (
-                <button 
-                  className="btn-solid-primary"
-                  onClick={() => onResolveStream(ano)}
-                  disabled={loadingEventId === ano.id}
-                >
-                  <Sparkles size={16} />
-                  <span>Fix with AI</span>
-                </button>
-              )}
-
-              {ano.status === 'escalated_to_human' && (
-                <div>
-                  <div style={{ 
-                    background: 'var(--accent-rose-bg)', 
-                    border: '1px solid var(--accent-rose-border)', 
-                    borderRadius: '8px', 
-                    padding: '0.75rem',
-                    marginBottom: '0.75rem'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-rose)', fontWeight: 600, fontSize: '0.82rem' }}>
-                      <ShieldAlert size={15} />
-                      <span>Manager Approval Needed</span>
+                {/* Card Top Row */}
+                <div className="card-top-row">
+                  <div className="user-badge-group">
+                    <div className="user-avatar" style={{ background: 'var(--primary)' }}>
+                      {getInitials(ano.employee_name)}
+                    </div>
+                    <div className="user-info">
+                      <h3>{ano.employee_name}</h3>
+                      <p>{ano.department || 'Engineering'} • {ano.employee_id}</p>
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.6rem' }}>
-                    <button 
-                      className="btn-approve-clean"
-                      onClick={() => onHitlDecision(ano.id, 'APPROVED', 'Manager approved check-in override')}
-                    >
-                      <UserCheck size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                      Approve
-                    </button>
-                    <button 
-                      className="btn-reject-clean"
-                      onClick={() => onHitlDecision(ano.id, 'REJECTED', 'Marked as unexcused absence')}
-                    >
-                      <XCircle size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                      Reject
-                    </button>
+                  <div style={{ textAlign: 'right' }}>
+                    <span className={`status-pill ${ano.status}`}>
+                      {ano.status === 'escalated_to_human' ? 'Needs Review' : isResolved ? 'AI Excused (Present)' : formatLabel(ano.status)}
+                    </span>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: '0.2rem', fontFamily: 'var(--font-mono)' }}>
+                      #{ano.id}
+                    </div>
                   </div>
+                </div>
+
+                {/* Guardrail Quota Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0.65rem 0' }}>
+                  <span className={`guardrail-chip ${isGuardrailTripped ? 'danger' : occurrenceCount === 2 ? 'warn' : 'pass'}`}>
+                    {isGuardrailTripped ? (
+                      <>
+                        <AlertCircle size={11} />
+                        <span>Occurrence #{occurrenceCount} (Quota Exceeded ➔ Requires Sign-Off)</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={11} />
+                        <span>Occurrence #{occurrenceCount} of 2 (Auto-Eligible)</span>
+                      </>
+                    )}
+                  </span>
+
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                    Reliability: <strong>{ano.reliability_score || 98.5}%</strong>
+                  </span>
+                </div>
+
+                {/* Structured 2x2 Telemetry Grid */}
+                <div className="card-metrics-grid">
+                  <div className="metric-item">
+                    <span className="metric-label">Issue Flag</span>
+                    <span className="metric-val" style={{ color: severity.color }}>
+                      {formatLabel(ano.anomaly_type)}
+                    </span>
+                  </div>
+
+                  <div className="metric-item">
+                    <span className="metric-label">Punch Time</span>
+                    <span className="metric-val">
+                      <Clock size={13} color="var(--text-dim)" />
+                      {ano.timestamp || '08:30 AM'}
+                    </span>
+                  </div>
+
+                  <div className="metric-item">
+                    <span className="metric-label">GPS Telemetry</span>
+                    <span className={`metric-val ${maskPII ? 'pii-masked' : ''}`}>
+                      <MapPin size={13} color="var(--accent-amber)" />
+                      {ano.simulated_distance_m ? `${ano.simulated_distance_m}m Outside` : 'Campus Zone'}
+                    </span>
+                  </div>
+
+                  <div className="metric-item">
+                    <span className="metric-label">Gate Camera OCR</span>
+                    <span className={`metric-val ${maskPII ? 'pii-masked' : ''}`}>
+                      <Car size={13} color="var(--accent-cyan)" />
+                      {ano.gate_event_simulated ? 'Plate Confirmed (99%)' : 'No OCR Read'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Prominent AI Verdict Box */}
+                <div className="reasoning-subfield" style={{ background: isResolved ? 'var(--accent-green-bg)' : 'var(--bg-card-subtle)', borderColor: isResolved ? 'var(--accent-green-border)' : 'var(--border-subtle)', margin: '0.65rem 0' }}>
+                  <div className="reasoning-subfield-title" style={{ color: isResolved ? 'var(--accent-green)' : 'var(--text-primary)' }}>
+                    <Sparkles size={12} />
+                    <span>AI Verdict & Governance Action</span>
+                  </div>
+                  <div className="reasoning-subfield-content" style={{ color: isResolved ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                    {ano.ai_resolution_reason || (isPending ? 'Multi-signal investigation standing by. Click "Resolve with AI" below.' : ano.notes)}
+                  </div>
+                </div>
+
+                {/* Collapsible Sensor & Policy Accordion */}
+                <div className="reasoning-accordion-toggle" onClick={() => toggleReasoning(ano.id)}>
+                  <span>{isExpanded ? 'Hide Sensor Evidence & Rule Drilldown' : 'Inspect Correlated Sensor Evidence & Rule Drilldown'}</span>
+                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
+
+                {isExpanded && (
+                  <div className="reasoning-structured-box" style={{ marginTop: '0.5rem' }}>
+                    <div className="reasoning-subfield">
+                      <div className="reasoning-subfield-title">
+                        <Search size={12} color="var(--accent-cyan)" />
+                        <span>1. Sensor Evidence Correlated</span>
+                      </div>
+                      <div className="reasoning-subfield-content">
+                        {ano.gate_event_simulated 
+                          ? `Optical LPR (Main Gate #1) matched vehicle plate ${maskText(ano.simulated_plate || 'NY-99-DC-1099')} with 99.4% optical confidence within 15 min window.`
+                          : 'No matching vehicle plate detected at campus entrance cameras.'}
+                      </div>
+                    </div>
+
+                    <div className="reasoning-subfield">
+                      <div className="reasoning-subfield-title">
+                        <FileCheck size={12} color="var(--ai-indigo)" />
+                        <span>2. Policy Rule Cited</span>
+                      </div>
+                      <div className="reasoning-subfield-content">
+                        <strong>POL-ATT-04 (Traffic & Gate Verification):</strong> Auto-excuse geofence breach if optical camera confirms campus arrival within 15 mins.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions Footer */}
+                <div className="card-actions">
+                  {isPending && activeRole !== 'AUDITOR' && (
+                    <button 
+                      className="card-btn resolve-ai"
+                      onClick={() => onResolveStream(ano)}
+                      disabled={loadingEventId === ano.id}
+                    >
+                      <Sparkles size={15} />
+                      <span>{loadingEventId === ano.id ? 'Agent Triaging...' : 'Resolve with AI'}</span>
+                    </button>
+                  )}
+
+                  {isEscalated && activeRole !== 'AUDITOR' && (
+                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                      <button 
+                        className="card-btn"
+                        style={{ background: 'var(--accent-green)', color: '#ffffff' }}
+                        onClick={() => onHitlDecision(ano.id, 'APPROVE', 'Manager manual override approved')}
+                      >
+                        <CheckCircle2 size={14} />
+                        <span>Approve</span>
+                      </button>
+                      <button 
+                        className="card-btn"
+                        style={{ background: 'var(--accent-rose)', color: '#ffffff' }}
+                        onClick={() => onHitlDecision(ano.id, 'REJECT', 'Discrepancy rejected — quota breach')}
+                      >
+                        <XCircle size={14} />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  )}
 
                   <button 
+                    className="card-btn view-details"
                     onClick={() => onOpenDetailModal(ano)}
-                    style={{
-                      width: '100%',
-                      background: 'transparent',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      padding: '0.45rem',
-                      color: 'var(--primary)',
-                      fontSize: '0.78rem',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.35rem'
-                    }}
                   >
-                    <FileText size={14} />
-                    <span>View Evidence & Policy</span>
+                    <Eye size={14} />
+                    <span>Evidence Dossier</span>
+                  </button>
+
+                  <button 
+                    className="header-icon-btn"
+                    onClick={() => handlePrintDossier(ano)}
+                    title="Print HR Compliance Memorandum"
+                    style={{ width: 36, height: 36 }}
+                  >
+                    <Printer size={14} />
                   </button>
                 </div>
-              )}
-
-              {ano.status === 'resolved' && (
-                <div className="resolution-result-card">
-                  <div className="resolution-result-header">
-                    <div className="resolution-tag">
-                      <CheckCircle2 size={16} color="var(--accent-green)" />
-                      <span>{ano.human_action ? `Manager: ${ano.human_action}` : 'Resolved by AI'}</span>
-                    </div>
-                  </div>
-
-                  {ano.agent_resolution && (
-                    <>
-                      <div style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 500, marginTop: '0.25rem' }}>
-                        {ano.agent_resolution.action_taken}
-                      </div>
-
-                      <button 
-                        onClick={() => onOpenDetailModal(ano)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--primary)',
-                          fontWeight: 500,
-                          fontSize: '0.78rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          marginTop: '0.5rem',
-                          padding: 0
-                        }}
-                      >
-                        <span>View Investigation Details</span>
-                        <ArrowRight size={13} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

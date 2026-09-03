@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { X, FileText, CheckCircle2 } from 'lucide-react';
+import { X, FileText, CheckCircle2, BookOpen, Sparkles } from 'lucide-react';
 
 export default function PolicyModal({ isOpen, onClose, onPolicyAdded }) {
   const [category, setCategory] = useState('GEOFENCE');
@@ -17,7 +17,7 @@ export default function PolicyModal({ isOpen, onClose, onPolicyAdded }) {
     setLoading(true);
 
     try {
-      await axios.post('http://localhost:5000/api/policies', {
+      const res = await axios.post('http://localhost:5000/api/policies', {
         category,
         title,
         policy_text: policyText,
@@ -28,7 +28,7 @@ export default function PolicyModal({ isOpen, onClose, onPolicyAdded }) {
       setPolicyText('');
       setActionGuidance('');
       onClose();
-      onPolicyAdded();
+      onPolicyAdded(res.data);
     } catch (error) {
       alert('Failed to save policy: ' + error.message);
     } finally {
@@ -38,89 +38,117 @@ export default function PolicyModal({ isOpen, onClose, onPolicyAdded }) {
 
   return (
     <div className="clean-modal-backdrop" onClick={onClose}>
-      <div className="clean-modal-card" style={{ maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="clean-modal-card" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
         <div className="clean-modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <FileText size={18} color="var(--primary)" />
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Add Company Policy
-            </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ 
+              width: '36px', 
+              height: '36px', 
+              borderRadius: '8px', 
+              background: 'var(--ai-indigo-bg)', 
+              color: 'var(--ai-indigo)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center' 
+            }}>
+              <BookOpen size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                Add Corporate Attendance Policy
+              </h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+                Create a rule that the AI agent will query during anomaly investigations.
+              </p>
+            </div>
           </div>
-          <button 
-            onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}
-          >
+
+          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="clean-modal-body">
-            <div className="form-field">
-              <label>Category</label>
-              <select className="clean-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="GEOFENCE">Location & GPS</option>
-                <option value="LATE_ARRIVAL">Late Arrival</option>
-                <option value="REMOTE_WORK">Remote Work</option>
-                <option value="HARDWARE_FAIL">Scanner Issues</option>
-                <option value="EMERGENCY">Emergency</option>
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label>Policy Title</label>
-              <input 
-                type="text"
-                className="clean-input"
-                placeholder="e.g. Inclement Weather Grace Period"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-field">
-              <label>Policy Description</label>
-              <textarea 
-                className="clean-textarea"
-                rows="3"
-                placeholder="Describe the rule and conditions..."
-                value={policyText}
-                onChange={(e) => setPolicyText(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-field" style={{ marginBottom: 0 }}>
-              <label>AI Action Rule</label>
-              <input 
-                type="text"
-                className="clean-input"
-                placeholder="e.g. If weather emergency confirmed, auto-override late arrival to Present."
-                value={actionGuidance}
-                onChange={(e) => setActionGuidance(e.target.value)}
-                required
-              />
-            </div>
+        <form onSubmit={handleSubmit} className="modal-scrollable-body" style={{ gap: '1.25rem' }}>
+          <div>
+            <label style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
+              Policy Category
+            </label>
+            <select 
+              className="global-search-input" 
+              value={category} 
+              onChange={(e) => setCategory(e.target.value)}
+              style={{ padding: '0.65rem 0.85rem' }}
+            >
+              <option value="GEOFENCE">GPS & Location Exceptions</option>
+              <option value="LATE_ARRIVAL">Traffic & Transit Grace Periods</option>
+              <option value="REMOTE_WORK">Remote & Field Work Approvals</option>
+              <option value="HARDWARE_FAIL">Gate Camera / Scanner Outage</option>
+              <option value="EMERGENCY">Severe Weather & Force Majeure</option>
+            </select>
           </div>
 
-          <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', background: 'var(--bg-app)' }}>
+          <div>
+            <label style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
+              Policy Title
+            </label>
+            <input 
+              type="text"
+              className="global-search-input"
+              placeholder="e.g. Inclement Weather Grace Period"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={{ padding: '0.65rem 0.85rem' }}
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
+              Rule Description & Criteria
+            </label>
+            <textarea 
+              className="global-search-input"
+              rows="3"
+              placeholder="Describe the condition (e.g. 'Employees delayed due to highway construction are excused if vehicle arrives at gate before 09:30 AM')..."
+              value={policyText}
+              onChange={(e) => setPolicyText(e.target.value)}
+              style={{ padding: '0.65rem 0.85rem', minHeight: '80px', resize: 'vertical' }}
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '0.4rem', display: 'block' }}>
+              AI Agent Action Guidance
+            </label>
+            <input 
+              type="text"
+              className="global-search-input"
+              placeholder="e.g. If gate camera verifies vehicle, auto-override late arrival to Present."
+              value={actionGuidance}
+              onChange={(e) => setActionGuidance(e.target.value)}
+              style={{ padding: '0.65rem 0.85rem' }}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button 
               type="button" 
-              className="filter-btn" 
+              className="card-btn view-details" 
               onClick={onClose}
-              style={{ border: '1px solid var(--border-subtle)' }}
+              style={{ flex: 'none', padding: '0.6rem 1.25rem' }}
             >
               Cancel
             </button>
             <button 
               type="submit" 
-              className="btn-solid-primary" 
               disabled={loading}
-              style={{ width: 'auto' }}
+              className={`card-btn resolve-ai ${loading ? 'btn-shimmer' : ''}`}
+              style={{ flex: 'none', padding: '0.6rem 1.5rem' }}
             >
-              <CheckCircle2 size={16} />
-              <span>{loading ? 'Saving...' : 'Save Policy'}</span>
+              <Sparkles size={15} />
+              <span>{loading ? 'Saving Policy...' : 'Save & Publish Rule'}</span>
             </button>
           </div>
         </form>

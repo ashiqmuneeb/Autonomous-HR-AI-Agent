@@ -11,13 +11,37 @@ import {
   Loader2, 
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Clock,
+  Terminal,
+  Code,
+  Layers,
+  Check
 } from 'lucide-react';
 import { formatLabel } from '../utils';
 
-export default function StreamingThoughtModal({ isOpen, onClose, anomaly, streamEvents, isStreaming, onComplete }) {
+export default function StreamingThoughtModal({ 
+  isOpen, 
+  onClose, 
+  anomaly, 
+  streamEvents, 
+  isStreaming, 
+  onComplete 
+}) {
   const terminalEndRef = useRef(null);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    let timer;
+    if (isOpen && isStreaming) {
+      setElapsedSeconds(0);
+      timer = setInterval(() => {
+        setElapsedSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isOpen, isStreaming]);
 
   useEffect(() => {
     if (terminalEndRef.current) {
@@ -28,6 +52,13 @@ export default function StreamingThoughtModal({ isOpen, onClose, anomaly, stream
   if (!isOpen || !anomaly) return null;
 
   const finalDecision = streamEvents.find(e => e.type === 'decision')?.decision;
+  const toolCallsCount = streamEvents.filter(e => e.type === 'tool_call').length;
+
+  // Determine stage progress for the visual graph
+  const hasCheckedGps = streamEvents.some(e => e.tool_name === 'check_geofence_logs');
+  const hasCheckedGate = streamEvents.some(e => e.tool_name === 'query_lpr_events');
+  const hasCheckedPolicy = streamEvents.some(e => e.tool_name === 'search_hr_policy');
+  const hasCompleted = !isStreaming && (finalDecision || streamEvents.length > 0);
 
   const getFriendlyStepDescription = (evt) => {
     if (evt.type === 'thought') {
@@ -40,7 +71,7 @@ export default function StreamingThoughtModal({ isOpen, onClose, anomaly, stream
         case 'query_lpr_events': return 'Checking parking gate camera logs for vehicle entry...';
         case 'search_hr_policy': return 'Consulting company policy rulebook...';
         case 'contact_employee': return 'Sending message to employee for clarification...';
-        case 'override_attendance_record': return 'Updating attendance record in database...';
+        case 'override_attendance_record': return 'Executing autonomous attendance override in SQLite...';
         case 'create_hr_ticket': return 'Creating ticket for manager review...';
         default: return `Running check: ${evt.tool_name}...`;
       }
@@ -85,145 +116,171 @@ export default function StreamingThoughtModal({ isOpen, onClose, anomaly, stream
         <div className="clean-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{ 
-              width: '36px', 
-              height: '36px', 
+              width: '38px', 
+              height: '38px', 
               borderRadius: '8px', 
-              background: 'var(--primary-light)', 
-              color: '#818cf8', 
+              background: 'var(--ai-indigo-bg)', 
+              border: '1px solid var(--ai-indigo-border)',
+              color: 'var(--ai-indigo)', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center' 
             }}>
-              <Sparkles size={20} />
+              <BrainCircuit size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                AI Investigation in Progress
-              </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
-                Resolving {formatLabel(anomaly.anomaly_type)} for {anomaly.employee_name || anomaly.employee_id}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  LangGraph Agent Investigation
+                </h3>
+                {isStreaming ? (
+                  <span className="status-pill pending" style={{ fontSize: '0.68rem' }}>
+                    <Loader2 size={11} className="animate-spin" /> Live Stream
+                  </span>
+                ) : (
+                  <span className="status-pill resolved" style={{ fontSize: '0.68rem' }}>
+                    Completed
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginTop: '0.1rem' }}>
+                Investigating: <strong>{anomaly.employee_name || anomaly.employee_id}</strong> • Issue: <strong>{formatLabel(anomaly.anomaly_type)}</strong>
               </p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        <div className="clean-modal-body">
-          {/* Status banner while streaming */}
-          {isStreaming && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
-              gap: '0.5rem', 
-              background: 'var(--accent-cyan-bg)', 
-              border: '1px solid var(--accent-cyan-border)', 
-              borderRadius: '8px', 
-              padding: '0.65rem 0.9rem',
-              color: 'var(--accent-cyan)',
-              fontSize: '0.82rem',
-              fontWeight: 500
+              gap: '0.4rem', 
+              background: 'var(--bg-card-subtle)', 
+              padding: '0.3rem 0.65rem', 
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--border-subtle)',
+              fontSize: '0.75rem',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-secondary)'
             }}>
-              <Loader2 size={16} className="spinner" />
-              <span>AI is actively cross-referencing camera feeds, GPS telemetry, and company policies...</span>
+              <Clock size={13} />
+              <span>{elapsedSeconds}s</span>
+              <span style={{ color: 'var(--border-strong)' }}>|</span>
+              <span style={{ color: 'var(--primary)' }}>{toolCallsCount} Tools</span>
             </div>
-          )}
 
-          {/* Clean Step Timeline */}
-          <div className="step-timeline">
-            {streamEvents.length === 0 && (
-              <div style={{ color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '1rem 0', textAlign: 'center' }}>
-                Connecting to AI agent...
-              </div>
-            )}
-
-            {streamEvents.map((evt, idx) => (
-              <div key={idx} className="timeline-step">
-                <div className="timeline-icon-col">
-                  {getStepIcon(evt)}
-                  <div className="timeline-line"></div>
-                </div>
-
-                <div className="timeline-content">
-                  <div className="timeline-step-title">
-                    {getFriendlyStepDescription(evt)}
-                  </div>
-
-                  {/* Optional Technical Details view */}
-                  {showTechnicalDetails && evt.type === 'tool_result' && (
-                    <div className="timeline-step-detail">
-                      <code style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{evt.tool_output}</code>
-                    </div>
-                  )}
-
-                  {evt.type === 'error' && (
-                    <div style={{ color: 'var(--accent-rose)', background: 'var(--accent-rose-bg)', border: '1px solid var(--accent-rose-border)', padding: '0.5rem', borderRadius: '4px', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                      <AlertTriangle size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                      {evt.content}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            <div ref={terminalEndRef} />
-          </div>
-
-          {/* Technical Details Toggle */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button 
-              onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-tertiary)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
-            >
-              {showTechnicalDetails ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              {showTechnicalDetails ? 'Hide technical logs' : 'Show technical logs'}
+            <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+              <X size={18} />
             </button>
           </div>
+        </div>
 
-          {/* Final Decision Box */}
-          {finalDecision && (
-            <div className="resolution-result-card" style={{ marginTop: '0.5rem' }}>
-              <div className="resolution-result-header">
-                <div className="resolution-tag" style={{ fontSize: '0.9rem' }}>
-                  <CheckCircle2 size={18} color="#059669" />
-                  <span>Resolution Completed</span>
-                </div>
-                <span className="status-pill resolved" style={{ background: 'rgba(5, 150, 105, 0.15)' }}>
-                  Confidence: {((finalDecision.confidence_score || 0.95) * 100).toFixed(0)}%
-                </span>
+        {/* Scrollable Body */}
+        <div className="modal-scrollable-body">
+          {/* Visual Agent Reasoning Graph Stepper */}
+          <div>
+            <div style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+              Agent Reasoning Pipeline
+            </div>
+            <div className="agent-graph-stepper">
+              <div className="graph-step-node completed">
+                <div className="graph-node-icon"><AlertTriangle size={15} color="var(--accent-amber)" /></div>
+                <div className="graph-node-label">1. Anomaly Trigger</div>
               </div>
 
-              <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                {finalDecision.action_taken}
+              <div className={`graph-step-node ${hasCheckedGps ? 'completed' : isStreaming ? 'active' : ''}`}>
+                <div className="graph-node-icon"><Search size={15} /></div>
+                <div className="graph-node-label">2. GPS Geofence</div>
               </div>
 
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.5rem', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
-                {finalDecision.reasoning}
+              <div className={`graph-step-node ${hasCheckedGate ? 'completed' : hasCheckedGps && isStreaming ? 'active' : ''}`}>
+                <div className="graph-node-icon"><ShieldCheck size={15} /></div>
+                <div className="graph-node-label">3. Gate LPR OCR</div>
+              </div>
+
+              <div className={`graph-step-node ${hasCheckedPolicy ? 'completed' : hasCheckedGate && isStreaming ? 'active' : ''}`}>
+                <div className="graph-node-icon"><Database size={15} /></div>
+                <div className="graph-node-label">4. Policy RAG</div>
+              </div>
+
+              <div className={`graph-step-node ${hasCompleted ? 'completed' : ''}`}>
+                <div className="graph-node-icon"><Sparkles size={15} color="#10b981" /></div>
+                <div className="graph-node-label">5. Autonomous Decision</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Terminal & Stream Events */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
+                <Terminal size={14} />
+                <span>Live Agent Execution Log</span>
               </div>
 
               <button 
-                className="btn-solid-primary" 
-                onClick={() => {
-                  onComplete();
-                  onClose();
+                onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  fontSize: '0.75rem', 
+                  color: 'var(--primary)', 
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  fontWeight: 600
                 }}
-                style={{ marginTop: '1rem', background: '#10b981' }}
               >
-                <CheckCircle2 size={16} />
-                <span>Done</span>
+                <Code size={13} />
+                <span>{showTechnicalDetails ? 'Hide JSON/SQL Payloads' : 'Inspect JSON/SQL Payloads'}</span>
+                {showTechnicalDetails ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
+            </div>
+
+            <div className="streaming-terminal-box">
+              {streamEvents.length === 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--text-tertiary)', padding: '1rem' }}>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Connecting to LangGraph agent brain...</span>
+                </div>
+              ) : (
+                streamEvents.map((evt, idx) => (
+                  <div key={idx} className="terminal-event-row">
+                    <span className={`terminal-badge ${evt.type}`}>
+                      {evt.type === 'tool_call' ? evt.tool_name : evt.type}
+                    </span>
+                    <div className="terminal-text">
+                      <div>{getFriendlyStepDescription(evt)}</div>
+                      {showTechnicalDetails && (evt.arguments || evt.result) && (
+                        <pre className="json-inspector-box">
+                          {JSON.stringify(evt.arguments || evt.result, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={terminalEndRef} />
+            </div>
+          </div>
+
+          {/* Final Decision Card */}
+          {finalDecision && (
+            <div style={{ 
+              padding: '1.25rem', 
+              borderRadius: 'var(--radius-lg)', 
+              background: finalDecision.action === 'OVERRIDE_RECORD' ? 'var(--accent-green-bg)' : 'var(--accent-amber-bg)',
+              border: `1px solid ${finalDecision.action === 'OVERRIDE_RECORD' ? 'var(--accent-green-border)' : 'var(--accent-amber-border)'}` 
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <Sparkles size={18} color={finalDecision.action === 'OVERRIDE_RECORD' ? 'var(--accent-green)' : 'var(--accent-amber)'} />
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Autonomous Agent Verdict: {finalDecision.action === 'OVERRIDE_RECORD' ? 'Approved & Record Overridden' : 'Escalated for Human Review'}
+                </h4>
+              </div>
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                {finalDecision.reasoning || finalDecision.explanation || 'The LangGraph agent verified all sensor evidence, correlated gate telemetry, and updated the attendance database.'}
+              </p>
             </div>
           )}
         </div>
