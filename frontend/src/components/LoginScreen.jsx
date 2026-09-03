@@ -83,8 +83,8 @@ export default function LoginScreen({ onLogin }) {
       <div className="login-card-container">
         {/* Brand Header */}
         <div className="login-brand-header">
-          <div className="brand-logo-icon" style={{ width: 48, height: 48 }}>
-            <BrainCircuit size={26} />
+          <div className="brand-logo-icon" style={{ width: 54, height: 54, background: 'transparent', boxShadow: 'none' }}>
+            <img src="/logo.svg" alt="PulseHR" style={{ width: 54, height: 54, borderRadius: 14 }} />
           </div>
           <div className="login-titles">
             <h2>PulseHR</h2>

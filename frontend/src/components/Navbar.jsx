@@ -17,8 +17,8 @@ export default function Sidebar({ activeTab, setActiveTab, pendingCount, escalat
     <aside className="app-sidebar">
       {/* Brand Header */}
       <div className="sidebar-brand">
-        <div className="brand-logo-icon">
-          <BrainCircuit size={22} />
+        <div className="brand-logo-icon" style={{ background: 'transparent', boxShadow: 'none' }}>
+          <img src="/logo.svg" alt="PulseHR Logo" style={{ width: 38, height: 38, borderRadius: 10 }} />
         </div>
         <div className="brand-titles">
           <h2>PulseHR</h2>

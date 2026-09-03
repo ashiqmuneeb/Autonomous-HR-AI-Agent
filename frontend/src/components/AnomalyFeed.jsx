@@ -125,8 +125,8 @@ export default function AnomalyFeed({
       {/* Page Header */}
       <div className="page-header">
         <div className="page-header-titles">
-          <h1>Workforce Attendance Discrepancies</h1>
-          <p>Multi-signal automated triage cross-referencing GPS geofence breaches, optical gate camera OCR, and corporate policies with full auditability.</p>
+          <h1>Attendance Issues & Autonomous Resolutions</h1>
+          <p>The AI automatically cross-checks gate cameras and GPS data to resolve punch errors using company policies.</p>
         </div>
 
         {/* View Mode & Filter Controls */}
